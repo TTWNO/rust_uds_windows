@@ -78,7 +78,7 @@ pub unsafe fn sockaddr_un(path: &Path) -> io::Result<(c::sockaddr_un, c_int)> {
     // struct
 
     let mut len = sun_path_offset(&addr) + bytes.len();
-    match bytes.get(0) {
+    match bytes.first() {
         Some(&0) | None => {}
         Some(_) => len += 1,
     }
@@ -191,11 +191,7 @@ impl SocketAddr {
     // assert_eq!(addr.is_unnamed(), true);
     // ```
     pub fn is_unnamed(&self) -> bool {
-        if let AddressKind::Unnamed = self.address() {
-            true
-        } else {
-            false
-        }
+        matches!(self.address(), AddressKind::Unnamed)
     }
 
     /// Returns the contents of this address if it is a `pathname` address.
@@ -232,7 +228,7 @@ impl SocketAddr {
         }
     }
 
-    fn address<'a>(&'a self) -> AddressKind<'a> {
+    fn address(&self) -> AddressKind {
         let len = self.len as usize - sun_path_offset(&self.addr);
         // sockaddr_un::sun_path on Windows is a Win32 UTF-8 file system path
         let path = unsafe { mem::transmute::<&[c_char], &[u8]>(&self.addr.sun_path) };
@@ -297,4 +293,4 @@ impl<'a> fmt::Display for AsciiEscaped<'a> {
 
 pub use self::ext::{AcceptAddrs, AcceptAddrsBuf, UnixListenerExt, UnixStreamExt};
 pub use self::net::{UnixListener, UnixStream};
-pub use self::socket::{init, Socket};
+

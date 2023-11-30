@@ -70,7 +70,7 @@ impl UnixStream {
                 cvt(connect(
                     inner.as_raw_socket() as _,
                     &addr as *const _ as *const _,
-                    len as i32,
+                    len,
                 ))?;
                 Ok(UnixStream(inner))
             }
@@ -196,7 +196,7 @@ impl UnixStream {
             .join()
             .map_err(|_| io::Error::from(io::ErrorKind::ConnectionRefused))?;
         let stream0 = (*(a.write().unwrap())).take().unwrap()?;
-        return Ok((stream0, stream1));
+        Ok((stream0, stream1))
     }
 
     /// Sets the read timeout to the timeout specified.
@@ -520,7 +520,7 @@ impl UnixListener {
     ///     }
     /// }
     /// ```
-    pub fn incoming<'a>(&'a self) -> Incoming<'a> {
+    pub fn incoming(&self) -> Incoming<'_> {
         Incoming { listener: self }
     }
 }
