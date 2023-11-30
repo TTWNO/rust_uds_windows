@@ -287,7 +287,7 @@ doit! { i8 i16 i32 i64 isize u8 u16 u32 u64 usize }
 
 fn last_err() -> io::Result<Option<usize>> {
     let err = unsafe { WSAGetLastError() };
-    if err == WSA_IO_PENDING as i32 {
+    if err == WSA_IO_PENDING {
         Ok(None)
     } else {
         Err(io::Error::from_raw_os_error(err))
@@ -317,14 +317,14 @@ unsafe fn ptrs_to_socket_addr(ptr: *const SOCKADDR, len: c_int) -> Option<Socket
         c::AF_UNIX if len as usize >= mem::size_of::<c::sockaddr_un>() => {
             let b = &*(ptr as *const c::sockaddr_un);
             match b.sun_path.iter().position(|c| *c == 0) {
-                Some(0) => from_sockaddr_un(b.clone(), len).ok(),
+                Some(0) => from_sockaddr_un(*b, len).ok(),
                 Some(i) => {
                     let mut l = sun_path_offset(b) + i;
-                    match b.sun_path.get(0) {
+                    match b.sun_path.first() {
                         Some(&0) | None => {}
                         Some(_) => l += 1,
                     }
-                    from_sockaddr_un(b.clone(), l as c_int).ok()
+                    from_sockaddr_un(*b, l as c_int).ok()
                 }
                 _ => None, // Invalid socket path, no terminating null byte
             }
@@ -424,7 +424,7 @@ impl UnixStreamExt for UnixStream {
                 self.as_raw_socket() as SOCKET,
                 SOL_SOCKET,
                 SO_UPDATE_CONNECT_CONTEXT,
-                0 as *const _,
+                std::ptr::null(),
                 0,
             )
         };
@@ -594,6 +594,12 @@ type GetAcceptExSockaddrs = unsafe extern "system" fn(
     LPINT,
 );
 
+impl Default for AcceptAddrsBuf {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AcceptAddrsBuf {
     /// Creates a new blank buffer ready to be passed to a call to
     /// `accept_overlapped`.
@@ -608,9 +614,9 @@ impl AcceptAddrsBuf {
     /// succeeded to parse out the data that was written in.
     pub fn parse(&self, socket: &UnixListener) -> io::Result<AcceptAddrs> {
         let mut ret = AcceptAddrs {
-            local: 0 as *mut _,
+            local: std::ptr::null_mut(),
             local_len: 0,
-            remote: 0 as *mut _,
+            remote: std::ptr::null_mut(),
             remote_len: 0,
             _data: self,
         };
@@ -634,7 +640,7 @@ impl AcceptAddrsBuf {
     }
 
     fn args(&self) -> (PVOID, DWORD, DWORD, DWORD) {
-        let remote_offset = unsafe { &(*(0 as *const AcceptAddrsBuf)).remote as *const _ as usize };
+        let remote_offset = unsafe { &(*std::ptr::null::<AcceptAddrsBuf>()).remote as *const _ as usize };
         (
             self as *const _ as *mut _,
             0,
@@ -663,7 +669,7 @@ impl WsaExtension {
         if prev != 0 && !cfg!(debug_assertions) {
             return Ok(prev);
         }
-        let mut ret = 0 as usize;
+        let mut ret = 0_usize;
         let mut bytes = 0;
         let r = unsafe {
             WSAIoctl(
@@ -674,7 +680,7 @@ impl WsaExtension {
                 &mut ret as *mut _ as *mut _,
                 mem::size_of_val(&ret) as DWORD,
                 &mut bytes,
-                0 as *mut _,
+                std::ptr::null_mut(),
                 None,
             )
         };
